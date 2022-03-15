@@ -19,11 +19,11 @@ class SensorModel:
         ####################################
         # TODO
         # Adjust these parameters
-        self.alpha_hit = 0
-        self.alpha_short = 0
-        self.alpha_max = 0
-        self.alpha_rand = 0
-        self.sigma_hit = 0
+        self.alpha_hit = 0.74
+        self.alpha_short = 0.07
+        self.alpha_max = 0.07
+        self.alpha_rand = 0.12
+        self.sigma_hit = 8.0
 
         # Your sensor table will be a `table_width` x `table_width` np array:
         self.table_width = 201
@@ -69,7 +69,26 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        raise NotImplementedError
+        # rows are measurements zk, cols are actual d
+        zmax = self.table_width
+        eta = 1.0
+        epsilon = 0.1
+        self.sensor_model_table = np.zeros((zmax, zmax))
+        for d in range(zmax):
+            p_hit_array = np.zeros((1, zmax))
+            for zk in range(zmax):
+                p_hit_array[0, zk] = eta * 1.0/(np.sqrt(2.0*np.pi*self.sigma_hit**2.0)) * np.exp(-(zk-d)**2.0/(2.0*self.sigma_hit**2.0))
+            p_hit_array = p_hit_array/p_hit_array.sum()
+            for zk in range(zmax):
+                #p_hit = eta * 1.0/(np.sqrt(2*np.pi*self.sigma_hit**2)) * np.exp(-(zk-d)**2/(2*self.sigma_hit**2))
+                p_short = 2.0/d * (1.0-zk/d) if (zk<=d and d!=0) else 0
+                p_max = 1.0 if zmax == zk else 0
+                p_rand = 1.0/zmax
+                self.sensor_model_table[zk,d] = (self.alpha_short * p_short 
+                                                + self.alpha_max * p_max + self.alpha_rand * p_rand)
+            self.sensor_model_table[:,d] = self.sensor_model_table[:,d] + self.alpha_hit*p_hit_array
+        for d in range(zmax):
+            self.sensor_model_table[:,d] = self.sensor_model_table[:,d]/self.sensor_model_table[:,d].sum()    
 
     def evaluate(self, particles, observation):
         """
@@ -91,7 +110,6 @@ class SensorModel:
                the probability of each particle existing
                given the observation and the map.
         """
-
         if not self.map_set:
             return
 
@@ -102,8 +120,26 @@ class SensorModel:
         # You will probably want to use this function
         # to perform ray tracing from all the particles.
         # This produces a matrix of size N x num_beams_per_particle 
-
+        zmax = self.table_width
+    
         scans = self.scan_sim.scan(particles)
+        scans = scans/(self.map_resolution*self.lidar_scale_to_map_scale)
+        np.clip(scans, 0, zmax)
+        observation = observation/(self.map_resolution*self.lidar_scale_to_map_scale)
+        np.clip(observation, 0, zmax)
+
+        n = len(scans)
+        m = self.num_beams_per_particle
+        
+        probabilities = np.zeros(n, 1)
+        for i in range(n):
+            sum = 0 
+            for j in range(m):
+                sum += self.sensor_model_table[scans[i, j], particles[i]]
+            probabilities[i] = sum
+        
+        return probabilities
+
 
         ####################################
 
@@ -135,3 +171,5 @@ class SensorModel:
         self.map_set = True
 
         print("Map initialized")
+
+
