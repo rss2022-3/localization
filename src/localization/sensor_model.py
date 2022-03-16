@@ -88,6 +88,7 @@ class SensorModel:
             p_hit_array = p_hit_array/(p_hit_array.sum())
             self.sensor_model_table[:,d] = self.sensor_model_table[:,d] + p_hit_array*self.alpha_hit
             self.sensor_model_table[:,d] = self.sensor_model_table[:,d]/(self.sensor_model_table[:,d].sum())
+            
 
     def evaluate(self, particles, observation):
         """
@@ -120,27 +121,23 @@ class SensorModel:
         # to perform ray tracing from all the particles.
         # This produces a matrix of size N x num_beams_per_particle 
         zmax = self.table_width-1
-    
+        scale = self.map_resolution*self.lidar_scale_to_map_scale
+
         scans = self.scan_sim.scan(particles)
-        scans = scans/(self.map_resolution*self.lidar_scale_to_map_scale)
-        scans.astype(int)
-        np.clip(scans, 0, zmax)
-        observation = observation/(self.map_resolution*self.lidar_scale_to_map_scale)
-        observation.astype(int)
-        np.clip(observation, 0, zmax)
+        scans = np.around(scans/scale)
+        scans = np.clip(scans, 0, zmax)
+
+        observation = np.around(observation/scale)
+        observation = np.clip(observation, 0, zmax)
 
         n = len(scans)
         m = self.num_beams_per_particle
         
-        print(scans)
-        probabilities = np.zeros((n, 1))
+        probabilities = np.ones(n)
         for i in range(n):
-            sum = 0 
             for j in range(m):
-                sum += self.sensor_model_table[(scans[i, j]), (particles[i])]
-            probabilities[i] = sum
+                probabilities[i] *= self.sensor_model_table[int(observation[i]),int(scans[i,j])]
         
-        probabilities = probabilities/(probabilities.sum(axis=0))
         return probabilities**(1.0/2.2)
 
 
