@@ -69,25 +69,21 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        # rows are measurements zk, cols are actual d
+        # rows are zk, cols are d
+        # 0.76186
         zmax = self.table_width
-        eta = 1.0
-        epsilon = 0.1
-        self.sensor_model_table = np.zeros((zmax, zmax))
+        self.sensor_model_table = np.zeros((zmax,zmax))
         for d in range(zmax):
-            p_hit_array = np.zeros((1, zmax))
+            p_hit_array = np.zeros(zmax)
             for zk in range(zmax):
-                p_hit_array[0, zk] = eta * 1.0/(np.sqrt(2.0*np.pi*self.sigma_hit**2.0)) * np.exp(-(zk-d)**2.0/(2.0*self.sigma_hit**2.0))
-            p_hit_array = p_hit_array/p_hit_array.sum()
-            for zk in range(zmax):
-                #p_hit = eta * 1.0/(np.sqrt(2*np.pi*self.sigma_hit**2)) * np.exp(-(zk-d)**2/(2*self.sigma_hit**2))
-                p_short = 2.0/d * (1.0-zk/d) if (zk<=d and d!=0) else 0
-                p_max = 1.0 if zmax == zk else 0
-                p_rand = 1.0/zmax
+                p_hit_array[zk] = np.exp(-((zk-d)**2.0)/(2.0*(self.sigma_hit**2.0)))
+                p_short = (2.0/d) * (1.0-zk/d) if (zk<=d and d!=0) else 0
+                p_max = 1.0 if (zmax-1) == zk else 0
+                p_rand = 1.0/(zmax-1)
                 self.sensor_model_table[zk,d] = (self.alpha_short * p_short 
                                                 + self.alpha_max * p_max + self.alpha_rand * p_rand)
-            self.sensor_model_table[:,d] = self.sensor_model_table[:,d] + self.alpha_hit*p_hit_array
-        for d in range(zmax):
+            p_hit_norm = p_hit_array/(p_hit_array.sum())
+            self.sensor_model_table[:,d] = self.sensor_model_table[:,d] + p_hit_norm*self.alpha_hit
             self.sensor_model_table[:,d] = self.sensor_model_table[:,d]/self.sensor_model_table[:,d].sum()    
 
     def evaluate(self, particles, observation):
@@ -171,5 +167,6 @@ class SensorModel:
         self.map_set = True
 
         print("Map initialized")
+
 
 

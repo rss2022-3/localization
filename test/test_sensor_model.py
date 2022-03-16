@@ -41,6 +41,7 @@ class TestSensorModel(unittest.TestCase):
         print(actual_table[:,2].sum())
         print(actual_table[:,4].sum())
         print(actual_table[:,7].sum())
+        
         np.testing.assert_allclose(expected_table, actual_table, rtol=self.tol)
 
     def test_evaluate(self):
