@@ -113,7 +113,7 @@ class ParticleFilter:
 
 
       print(avg_pose)
-      self.br.sendTransform((avg_pose[0], avge_pose[1],0),
+      self.br.sendTransform((avg_pose[0], avg_pose[1],0),
                             tf.transformations.quaternion_from_euler(0, 0, avg_pose[2]),
                             rospy.Time.now(),
                             "/base_link_pf",
