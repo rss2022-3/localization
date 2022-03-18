@@ -6,7 +6,7 @@ import numpy as np
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseWithCovarianceStamped
-from math import sin, cos
+from math import sin, cos, acos, atan2
 import tf
 
 class ParticleFilter:
@@ -59,6 +59,8 @@ class ParticleFilter:
         #     odometry you publish here should be with respect to the
         #     "/map" frame.
         self.odom_pub  = rospy.Publisher("/pf/pose/odom", Odometry, queue_size = 1)
+
+        self.particles = []
         
         # Initialize the models
         self.motion_model = MotionModel()
@@ -70,6 +72,14 @@ class ParticleFilter:
       self.pos = pose_msg.pose.pose.position
       self.heading = pose_msg.pose.pose.orientation
       self.covar = pose_msg.pose.covariance
+      particle = [self.pos.x, self.pos.y, 2*acos(self.heading.w)]
+      rospy.loginfo("I was called")
+      #create 200 points around this point
+      #TODO: tune these numbers
+      self.particles = [particle]
+      for i in range(199):
+        self.particles.append([particle[0] + np.random.uniform(-1,1), particle[1]  + np.random.uniform(-1,1), particle[2] + np.random.uniform(-np.pi,np.pi)])
+      self.MCL_update()
           
     
     def get_points(self, scan_msg):
@@ -84,21 +94,21 @@ class ParticleFilter:
 
     def get_odom(self, data):
       twist_msg = data.twist
-      x_dot = twist_msg.linear.x
-      y_dot = twist_msg.linear.y
-      th_dot = twist_msg.angular.z
+      x_dot = twist_msg.twist.linear.x
+      y_dot = twist_msg.twist.linear.y
+      th_dot = twist_msg.twist.angular.z
         
       #Compute odometry matrix (input to MotionModel())
       odom = np.array([x_dot, y_dot, th_dot]) 
       self.odom = odom
 
     def MCL_update(self):
-      particles = self.motion_model.evaluate(self.pcd, self.odom)
+      particles = self.motion_model.evaluate(self.particles, self.odom)
     
       weights = self.sensor_model.evaluate(particles, self.observations) 
       indices = np.random.choice(particles.shape[0], size=particles.shape[0], p=weights)
       new_particles = np.array([particles[i] for i in indices])
-
+      rospy.logerr(new_particles)
       # Add a small amount of noise to blur the samples.
       mean = [0, 0, 0]
       covariance = [[.001, 0, 0], [0, 0.001, 0], [0, 0, np.deg2rad(1)**2]]
@@ -106,7 +116,8 @@ class ParticleFilter:
       blur = np.random.multivariate_normal(mean, covariance, size=new_particles.shape[0])
       new_particles += blur
 
-      avg_theta = np.atan2(np.sin(new_particles[:,2]), np.cos(new_particles[:,2]))
+      avg_theta = atan2(np.sin(new_particles[:,2]), np.cos(new_particles[:,2]))
+
 
       avg_xy = np.mean(new_particles[:, :2], axis = 0)
       avg_pose = np.hstack(avg_xy, avg_theta)
@@ -134,5 +145,5 @@ class ParticleFilter:
 if __name__ == "__main__":
     rospy.init_node("particle_filter")
     pf = ParticleFilter()
-    pf.MCL_update()
+    #pf.MCL_update()
     rospy.spin()
