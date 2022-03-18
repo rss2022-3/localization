@@ -72,13 +72,14 @@ class ParticleFilter:
       self.pos = pose_msg.pose.pose.position
       self.heading = pose_msg.pose.pose.orientation
       self.covar = pose_msg.pose.covariance
-      particle = [self.pos.x, self.pos.y, 2*acos(self.heading.w)]
+      particle = [self.pos.x, self.pos.y, 2*acos(self.heading.w)] #currently debugging this line is sus
       rospy.loginfo("I was called")
       #create 200 points around this point
       #TODO: tune these numbers
       self.particles = [particle]
       for i in range(199):
-        self.particles.append([particle[0] + np.random.uniform(-1,1), particle[1]  + np.random.uniform(-1,1), particle[2] + np.random.uniform(-np.pi,np.pi)])
+        self.particles.append([particle[0], particle[1], particle[2]])
+        #self.particles.append([particle[0] + np.random.uniform(-1,1), particle[1]  + np.random.uniform(-1,1), particle[2]])
       self.MCL_update()
           
     
@@ -105,27 +106,29 @@ class ParticleFilter:
     def MCL_update(self):
       particles = self.motion_model.evaluate(self.particles, self.odom)
     
-      weights = self.sensor_model.evaluate(particles, self.observations) 
-      indices = np.random.choice(particles.shape[0], size=particles.shape[0], p=weights)
-      new_particles = np.array([particles[i] for i in indices])
+      #weights = self.sensor_model.evaluate(particles, self.observations) 
+      #indices = np.random.choice(particles.shape[0], size=particles.shape[0], p=weights)
+      #new_particles = np.array([particles[i] for i in indices])
+      
+      #TODO: TAKE THIS OUT WHEN SENSOR MODEL WORKS AND UNCOMMENT LINES ABOVE
+      new_particles = particles
       rospy.logerr(new_particles)
       # Add a small amount of noise to blur the samples.
       mean = [0, 0, 0]
       covariance = [[.001, 0, 0], [0, 0.001, 0], [0, 0, np.deg2rad(1)**2]]
 
-      blur = np.random.multivariate_normal(mean, covariance, size=new_particles.shape[0])
-      new_particles += blur
+      #blur = np.random.multivariate_normal(mean, covariance, size=new_particles.shape[0])
+      #new_particles += blur
 
-      avg_theta = atan2(np.sin(new_particles[:,2]), np.cos(new_particles[:,2]))
+      avg_theta = np.arctan2(np.mean(np.sin(new_particles[:,2])), np.mean(np.cos(new_particles[:,2])))
 
 
       avg_xy = np.mean(new_particles[:, :2], axis = 0)
-      avg_pose = np.hstack(avg_xy, avg_theta)
+      #avg_pose = np.hstack(avg_xy, avg_theta)
 
 
-      print(avg_pose)
-      self.br.sendTransform((avg_pose[0], avg_pose[1],0),
-                            tf.transformations.quaternion_from_euler(0, 0, avg_pose[2]),
+      self.br.sendTransform((avg_xy[0], avg_xy[1],0),
+                            tf.transformations.quaternion_from_euler(0, 0, avg_theta),
                             rospy.Time.now(),
                             "/base_link_pf",
                             "map")
@@ -145,5 +148,4 @@ class ParticleFilter:
 if __name__ == "__main__":
     rospy.init_node("particle_filter")
     pf = ParticleFilter()
-    #pf.MCL_update()
     rospy.spin()
