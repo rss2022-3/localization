@@ -35,8 +35,7 @@ class TestSensorModel(unittest.TestCase):
     def test_precompute_sensor_model(self):
         expected_table = np.array(TEST_PRECOMPUTED_TABLE)
         actual_table = self.sensor_model.sensor_model_table
-
-        self.assertTrue(actual_table.shape, expected_table.shape)
+        self.assertTrue(actual_table.shape, expected_table.shape)  
         np.testing.assert_allclose(expected_table, actual_table, rtol=self.tol)
 
     def test_evaluate(self):

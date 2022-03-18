@@ -19,11 +19,11 @@ class SensorModel:
         ####################################
         # TODO
         # Adjust these parameters
-        self.alpha_hit = 0
-        self.alpha_short = 0
-        self.alpha_max = 0
-        self.alpha_rand = 0
-        self.sigma_hit = 0
+        self.alpha_hit = 0.74
+        self.alpha_short = 0.07
+        self.alpha_max = 0.07
+        self.alpha_rand = 0.12
+        self.sigma_hit = 8.0
 
         # Your sensor table will be a `table_width` x `table_width` np array:
         self.table_width = 201
@@ -49,6 +49,9 @@ class SensorModel:
                 OccupancyGrid,
                 self.map_callback,
                 queue_size=1)
+        
+        self.map_resolution = 0
+        self.lidar_scale_to_map_scale = 1.0
 
     def precompute_sensor_model(self):
         """
@@ -69,7 +72,23 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        raise NotImplementedError
+        # rows are zk, cols are d
+        # first value is 0.76186
+        zmax = self.table_width-1
+        self.sensor_model_table = np.zeros((self.table_width,self.table_width))
+        for d in range(self.table_width):
+            p_hit_array = np.zeros(self.table_width)
+            for zk in range(self.table_width):
+                p_hit_array[zk] = 1.0/(np.sqrt(2.0*np.pi)*self.sigma_hit)*np.exp(-((zk-d)**2.0)/(2.0*(self.sigma_hit**2.0)))
+                p_short = (2.0/d) * (1.0-zk/d) if (zk<=d and d!=0) else 0
+                p_max = 1.0 if zmax == zk else 0
+                p_rand = 1.0/zmax
+                self.sensor_model_table[zk,d] = (self.alpha_short * p_short 
+                                                + self.alpha_max * p_max + self.alpha_rand * p_rand)
+            p_hit_array = p_hit_array/(p_hit_array.sum())
+            self.sensor_model_table[:,d] = self.sensor_model_table[:,d] + p_hit_array*self.alpha_hit
+            self.sensor_model_table[:,d] = self.sensor_model_table[:,d]/(self.sensor_model_table[:,d].sum())
+            
 
     def evaluate(self, particles, observation):
         """
@@ -91,7 +110,6 @@ class SensorModel:
                the probability of each particle existing
                given the observation and the map.
         """
-
         if not self.map_set:
             return
 
@@ -102,8 +120,26 @@ class SensorModel:
         # You will probably want to use this function
         # to perform ray tracing from all the particles.
         # This produces a matrix of size N x num_beams_per_particle 
+        zmax = self.table_width-1
+        scale = self.map_resolution*self.lidar_scale_to_map_scale
 
         scans = self.scan_sim.scan(particles)
+        scans = np.around(scans/scale)
+        scans = np.clip(scans, 0, zmax)
+
+        observation = np.around(observation/scale)
+        observation = np.clip(observation, 0, zmax)
+
+        n = len(scans)
+        m = self.num_beams_per_particle
+        
+        probabilities = np.ones(n)
+        for i in range(n):
+            for j in range(m):
+                probabilities[i] *= self.sensor_model_table[int(observation[i]),int(scans[i,j])]
+        
+        return probabilities**(1.0/2.2)
+
 
         ####################################
 
@@ -131,7 +167,12 @@ class SensorModel:
                 origin,
                 0.5) # Consider anything < 0.5 to be free
 
+        self.map_resolution = map_msg.info.resolution
+
         # Make the map set
         self.map_set = True
 
         print("Map initialized")
+
+
+
