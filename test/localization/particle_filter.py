@@ -43,6 +43,8 @@ class ParticleFilter:
         self.heading = None
         self.motion_noise_covariance = None
         self.sensor_noise_covariance = None
+        self.prev_time = None
+
         #  *Important Note #2:* You must respond to pose
         #     initialization requests sent to the /initialpose
         #     topic. You can test that this works properly using the
@@ -66,9 +68,11 @@ class ParticleFilter:
         self.motion_model = MotionModel()
         self.sensor_model = SensorModel()
 
+      
 
     def init_pose(self, pose_msg):
       #Get initial particle
+      self.prev_time = rospy.get_time()
       pose = pose_msg.pose.pose
       self.pos = pose.position
       quaternion = pose.orientation
@@ -84,12 +88,13 @@ class ParticleFilter:
 
       #create 200 points around this point
       #TODO: tune these numbers
+      #Add noise with covariance
       self.particles = [particle]
-      for i in range(199):
-        #self.particles.append([particle[0], particle[1], particle[2]])
-        self.particles.append([particle[0] + 0.1*np.random.uniform(-1,1),
-			      particle[1]  + 0.1*np.random.uniform(-1,1),
-			      particle[2] + 0.1*np.random.uniform(-1,1)])
+      for _ in range(199):
+        self.particles.append([particle[0], particle[1], particle[2]])
+        #self.particles.append([particle[0] + 0.1*np.random.uniform(-1,1),
+			     # particle[1]  + 0.1*np.random.uniform(-1,1),
+			     # particle[2] + 0.1*np.random.uniform(-1,1)])
 
     def get_points(self, scan_msg):
       #Choose laser scan values to consider based on side of wall to follow.
@@ -102,15 +107,17 @@ class ParticleFilter:
 
 
     def get_odom(self, odom_msg):
+      delta_t = rospy.get_time() - self.prev_time
       twist = odom_msg.twist.twist
       x_dot = twist.linear.x
       y_dot = twist.linear.y
       th_dot = twist.angular.z
 
       #Compute odometry matrix (input to MotionModel())
-      odom = np.array([x_dot, y_dot, th_dot])
+      odom = delta_t*np.array([x_dot, y_dot, th_dot])
       self.odom = odom
       self.MCL_update()
+      self.prev_time = rospy.get_time()
 
 
     def MCL_update(self):
@@ -127,8 +134,8 @@ class ParticleFilter:
       self.particles = new_particles.tolist()
 
       # Add a small amount of noise to blur the samples.
-      mean = [0, 0, 0]
-      covariance = [[.001, 0, 0], [0, 0.001, 0], [0, 0, np.deg2rad(1)**2]]
+      #mean = [0, 0, 0]
+      #covariance = [[.001, 0, 0], [0, 0.001, 0], [0, 0, np.deg2rad(1)**2]]
 
       #blur = np.random.multivariate_normal(mean, covariance, size=new_particles.shape[0])
       #new_particles += blur
@@ -143,9 +150,6 @@ class ParticleFilter:
                             "/base_link_pf",
                             "map")
 
-      avg = np.mean(new_particles, axis=0)
-      avg_xy = avg[0:2]
-      avg_theta = avg[2]
       avg_heading = tf.transformations.quaternion_from_euler(0, 0, avg_theta)
 
       #Publish pose estimate message
