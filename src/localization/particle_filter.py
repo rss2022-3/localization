@@ -87,8 +87,9 @@ class ParticleFilter:
       self.particles = [particle]
       for i in range(199):
         #self.particles.append([particle[0], particle[1], particle[2]])
-        self.particles.append([particle[0] + np.random.uniform(-1,1), particle[1]  + np.random.uniform(-1,1), particle[2]])
-
+        self.particles.append([particle[0] + 0.1*np.random.uniform(-1,1),
+			      particle[1]  + 0.1*np.random.uniform(-1,1),
+			      particle[2] + 0.1*np.random.uniform(-1,1)])
 
     def get_points(self, scan_msg):
       #Choose laser scan values to consider based on side of wall to follow.
@@ -123,6 +124,7 @@ class ParticleFilter:
       #Compute new particles based on probabilities from sensor model
       indices = np.random.choice(particles.shape[0], size=particles.shape[0], p=weights)
       new_particles = np.array([particles[i] for i in indices])
+      self.particles = new_particles.tolist()
 
       # Add a small amount of noise to blur the samples.
       mean = [0, 0, 0]
@@ -135,16 +137,22 @@ class ParticleFilter:
       avg_theta = np.arctan2(np.mean(np.sin(new_particles[:,2])), np.mean(np.cos(new_particles[:,2])))
       avg_xy = np.mean(new_particles[:, :2], axis = 0)
 
-      avg_heading = tf.transformations.quaternion_from_euler(0, 0, avg_theta)
-
-      self.br.sendTransform((avg_xy[0], avg_xy[1],0),
-                            avg_heading,
+      self.br.sendTransform((avg_xy[0], avg_xy[1], 0),
+		            tf.transformations.quaternion_from_euler(0, 0, avg_theta),
                             rospy.Time.now(),
                             "/base_link_pf",
                             "map")
 
+      avg = np.mean(new_particles, axis=0)
+      avg_xy = avg[0:2]
+      avg_theta = avg[2]
+      avg_heading = tf.transformations.quaternion_from_euler(0, 0, avg_theta)
+
       #Publish pose estimate message
       pose_est = Odometry()
+      pose_est.header.stamp = rospy.get_rostime()
+      pose_est.header.frame_id = "map"
+      pose_est.child_frame_id = "base_link"
       pose_est.pose.pose.position.x = avg_xy[0]
       pose_est.pose.pose.position.y = avg_xy[1]
       pose_est.pose.pose.position.z = 0
