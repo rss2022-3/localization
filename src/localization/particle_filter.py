@@ -14,6 +14,7 @@ class ParticleFilter:
         # Get parameters
         self.particle_filter_frame = \
                 rospy.get_param("~particle_filter_frame")
+        self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle", 100)
 
         # Initialize publishers/subscribers
         #
@@ -79,9 +80,9 @@ class ParticleFilter:
       self.particles = np.tile(np.array([position.x, position.y, heading[2]]), (N, 1))
 
       #add noise 
-      init_noise_covariance = np.array([[0.3,   0,                 0],
-                                        [  0, 0.3,                 0],
-                                        [  0,   0, np.deg2rad(5)**2]], dtype='float64')
+      init_noise_covariance = np.array([[0.0,   0,                 0],
+                                        [  0, 0.0,                 0],
+                                        [  0,   0, np.deg2rad(0)**2]], dtype='float64')
 
       self.particles += np.random.multivariate_normal(np.array([0, 0, 0]), init_noise_covariance, size=N)
 
@@ -94,10 +95,12 @@ class ParticleFilter:
       #Choose laser scan values to consider based on side of wall to follow.
       #angles = np.array([scan_msg.angle_min + i*scan_msg.angle_increment for i in range(len(scan_msg.ranges))])
       ranges = np.array(scan_msg.ranges)
+
       #pcd = np.vstack([ranges*np.cos(angles), ranges*np.sin(angles), angles])
 
       #Get particle probabilites from sensor model (200x1 array)
-      weights = self.sensor_model.evaluate(self.particles, ranges)
+      pcd = ranges[np.linspace(0, ranges.shape[0]-1, self.num_beams_per_particle, dtype=int)]
+      weights = self.sensor_model.evaluate(self.particles, pcd)
       weights = weights/weights.sum()
 
       #Compute new particles based on probabilities from sensor model
@@ -115,7 +118,6 @@ class ParticleFilter:
       x_dot = twist.linear.x
       y_dot = twist.linear.y
       th_dot = twist.angular.z
-
       #Compute odometry matrix (input to MotionModel())
       odom = np.array([x_dot, y_dot, th_dot])*(delta_t.to_sec())
       self.prev_time = odom_msg.header.stamp
@@ -123,9 +125,9 @@ class ParticleFilter:
       #update particle positions
       self.particles = self.motion_model.evaluate(self.particles, odom)
 
-      init_noise_covariance = np.array([[0.01,   0,                 0],
-                                        [  0, 0.01,                 0],
-                                        [  0,   0, np.deg2rad(2)**2]], dtype='float64')
+      init_noise_covariance = np.array([[0.0025**2,   0,                 0],
+                                        [  0, 0.0025**2,                 0],
+                                        [  0,   0, np.deg2rad(.001)**2]], dtype='float64')
 
       self.particles += np.random.multivariate_normal(np.array([0, 0, 0]), init_noise_covariance, size=self.particles.shape[0])
 
@@ -145,7 +147,7 @@ class ParticleFilter:
       self.br.sendTransform((avg_xy[0], avg_xy[1], 0),
                             avg_heading,
                             rospy.Time.now(),
-                            "/base_link_pf",
+                            "base_link_pf",
                             "map")
 
       #Publish pose estimate message

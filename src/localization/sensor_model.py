@@ -137,7 +137,7 @@ class SensorModel:
             #probabilities[i] = np.prod(self.sensor_model_table[observation.astype(int),scans[i].astype(int)])
         probabilities = np.prod(self.sensor_model_table[np.tile(observation.astype(int), (n,1)),scans.astype(int)], axis = 1)
         
-        return probabilities**(1.0/2.2)
+        return probabilities**(1.0/1.2)
 
 
         ####################################

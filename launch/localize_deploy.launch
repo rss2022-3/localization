@@ -1,0 +1,18 @@
+<launch>
+  <node pkg="localization" type="particle_filter.py" name="particle_filter" output="screen">
+    <rosparam command="load" file="$(find localization)/params.yaml"/>
+  </node>
+    <node pkg="localization" name ="odom_noise" type="odom_noise.py" output="screen">
+    <rosparam command="load" file="$(find localization)/params.yaml"/>
+  </node>
+
+  <arg name="map" default="$(find racecar_simulator)/maps/stata_basement.yaml"/>
+  <node pkg="map_server" name="map_server" type="map_server" args="$(arg map)"/>
+
+  <node pkg="joy" name="joy_node" type="joy_node"/>
+
+  <include file="$(find racecar_simulator)/launch/racecar_model.launch"/> 
+ 
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" />
+
+</launch>
